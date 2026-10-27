@@ -1,0 +1,37 @@
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y \
+  python3 \
+  python3-pip \
+  python3-venv \
+  build-essential \
+  libpq-dev \
+  ffmpeg \
+  && ln -sf /usr/bin/python3 /usr/local/bin/python \
+  && ln -sf /usr/bin/pip3 /usr/local/bin/pip \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt ./requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+  pip install -r requirements.txt
+
+COPY requirements_ml.txt ./requirements_ml.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+  pip install -r requirements_ml.txt
+
+COPY app ./app
+COPY alembic.ini .
+COPY alembic ./alembic
+
+ARG CELERY_UID=1000
+ARG CELERY_GID=1000
+RUN groupadd -g ${CELERY_GID} celeryuser \
+  && useradd -m -u ${CELERY_UID} -g ${CELERY_GID} -s /bin/bash celeryuser \
+  && mkdir -p /home/celeryuser/.cache/huggingface/hub \
+  && mkdir -p /home/celeryuser/.EasyOCR/model \
+  && chown -R celeryuser:celeryuser /home/celeryuser/.cache
+USER celeryuser
+
+CMD ["celery","-A","app.core.celery_app:celery_app","worker","--loglevel=INFO","-Q","default,transcription"]
