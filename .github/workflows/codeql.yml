@@ -1,0 +1,56 @@
+name: CodeQL
+on:
+    push:
+        branches: [main,develop]
+    pull_request:
+        branches: [main,develop]
+    workflow_dispatch:
+
+
+permissions:
+    contents: read
+    actions: read
+    security-events: write
+
+
+jobs:
+    analyse-python:
+        name: CodeQL (python)
+        if: github.server_url == 'https://github.com'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+
+            - name: Initialise CodeQL
+              uses: github/codeql-action/init@v3
+              with:
+                  languages: python
+
+
+            - name: Autobuild
+              uses: github/codeql-action/autobuild@v3
+
+
+            - name: Perform CodeQL Analysis
+              uses: github/codeql-action/analyze@v3
+
+    analyse-javascript:
+        name: CodeQL (javascript)
+        if: github.server_url == 'https://github.com'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Initialise CodeQL
+              uses: github/codeql-action/init@v3
+              with:
+                  languages: javascript
+
+            - name: Autobuild
+              uses: github/codeql-action/autobuild@v3
+
+            - name: Perform CodeQL Analysis
+              uses: github/codeql-action/analyze@v3

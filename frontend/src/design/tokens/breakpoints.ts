@@ -1,0 +1,7 @@
+export const breakpoints = {
+    sm: 768,
+    md: 1024,
+    lg: 1440,
+};
+
+export type Breakpoint = 'sm' | 'md' | 'lg' | 'xl';

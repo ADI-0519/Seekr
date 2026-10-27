@@ -1,0 +1,36 @@
+name: eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      finetune_task_id:
+        description: ClearML task ID from a completed finetune run (leave blank for baseline only)
+        required: false
+        default: ""
+
+jobs:
+  eval:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install deps
+        run: |
+          pip install -e ".[dev]" --break-system-packages --quiet
+          pip install gdown --break-system-packages --quiet
+
+      - name: download eval artifacts
+        run: python scripts/download_artifacts.py --eval
+
+      - name: eval data tests
+        run: pytest tests/test_eval_integration.py -v
+
+      - name: run full evaluation
+        run: |
+          TASK_ARG=""
+          if [ -n "${{ inputs.finetune_task_id }}" ]; then
+            TASK_ARG="--finetune-task-id ${{ inputs.finetune_task_id }}"
+          fi
+          python scripts/run_evaluation.py \
+            --clearml-task-name evaluation-ci \
+            $TASK_ARG
