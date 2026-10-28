@@ -1,13 +1,24 @@
-from app.main import app
+from app.api.jobs import router as jobs_router
+from app.api.videos import router as videos_router
+from fastapi import APIRouter
+
+ROUTERS = (jobs_router, videos_router)
 
 
 def route_endpoint(path: str, method: str):
-    for route in app.routes:
-        if getattr(route, "path", None) == path and method in getattr(route, "methods", set()):
-            endpoint = getattr(route, "endpoint", None)
-            if endpoint is not None:
-                return endpoint
+    api_path = path.removeprefix("/api")
+    for router in ROUTERS:
+        endpoint = _find_endpoint(router, api_path, method)
+        if endpoint is not None:
+            return endpoint
     raise AssertionError(f"Route {method} {path} not found")
+
+
+def _find_endpoint(router: APIRouter, path: str, method: str):
+    for route in router.routes:
+        if getattr(route, "path", None) == path and method in getattr(route, "methods", set()):
+            return getattr(route, "endpoint", None)
+    return None
 
 
 def test_expensive_job_routes_are_rate_limited():

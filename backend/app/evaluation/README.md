@@ -1,6 +1,12 @@
-# Evaluation Pipeline
+# Retrieval Quality Benchmark
 
-This module runs reproducible retrieval and segmentation evaluations for the Seekr team. It supports ablation comparisons across four indexing configurations — `baseline`, `+OCR`, `+Context`, and `+OCR+Context` — and produces a markdown report table, a machine-readable JSON file, and comparison plots showing Recall@K and per-config deltas over baseline.
+This module runs Seekr's reproducible retrieval quality benchmark, including topic-segmentation measurements. It supports ablation comparisons across four indexing configurations — `baseline`, `+OCR`, `+Context`, and `+OCR+Context` — and produces a markdown report table, a machine-readable JSON file, and comparison plots showing Hit@K and per-config deltas over baseline.
+
+## Benchmark Data and ClearML
+
+The benchmark uses transcript text, retrieval queries, expected time ranges, and topic-boundary labels. Remote runs upload this benchmark data and, when selected, fine-tuned model artifacts to ClearML. Only synthetic, licensed, or explicitly approved anonymised data may be used. Do not use real user lecture content unless its transfer to ClearML is covered by the applicable consent, privacy policy, and data-processing agreement.
+
+Run `python scripts/validate_benchmark_data.py` after downloading the benchmark data. The validator blocks common university names, module codes, student identifiers, academic email addresses, and coursework-specific terms. This automated check supplements—not replaces—manual review for names or other identifying context.
 
 ## Quick Start
 
@@ -22,8 +28,8 @@ python -m app.evaluation --output-dir evaluation_output/
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--gold-retrieval` | PATH | built-in fixtures | Path to retrieval ground-truth JSON |
-| `--gold-segmentation` | PATH | built-in fixtures | Path to segmentation ground-truth JSON |
+| `--gold-retrieval` | PATH | downloaded benchmark data | Path to retrieval benchmark JSON |
+| `--gold-segmentation` | PATH | downloaded benchmark data | Path to segmentation benchmark JSON |
 | `--output-dir` | PATH | `evaluation_output` | Directory to write all output files |
 | `--ablations` | TEXT | `baseline,+OCR,+Context,+OCR+Context` | Comma-separated ablation names to run |
 | `--k-values` | TEXT | `1,3,5,10` | Comma-separated K values for Recall@K |
@@ -43,7 +49,7 @@ All files are written to `--output-dir`:
 | `plots/recall_comparison.png` | Grouped bar chart of Recall@K per config |
 | `plots/delta_over_baseline.png` | Horizontal bar chart of metric improvement over the baseline config |
 
-## Adding Ground-Truth Queries
+## Adding Retrieval Benchmark Queries
 
 1. Open `app/evaluation/fixtures/retrieval_gold.json`.
 2. Append a new entry following the `GroundTruthQuery` schema:
@@ -69,7 +75,7 @@ All files are written to `--output-dir`:
 python -m app.evaluation --dry-run
 ```
 
-## Adding Segmentation Labels
+## Adding Segmentation Benchmark Labels
 
 1. Open `app/evaluation/fixtures/segmentation_gold.json`.
 2. Append a new entry following the `SegmentationGoldLabel` schema:
@@ -111,7 +117,7 @@ python -m app.evaluation --ablations "baseline,+BM25Only"
 
 **MRR (Mean Reciprocal Rank)** — for each query, the reciprocal of the rank of the first relevant result; averaged across queries. A score of 1.0 means every query's top result was relevant.
 
-**Segmentation F1** — compares predicted topic-boundary timestamps against gold boundaries using a greedy match within a configurable `tolerance_secs` window (default 15 s). Precision = matched / predicted; Recall = matched / gold; F1 = harmonic mean.
+**Segmentation F1** — compares predicted topic-boundary timestamps against expected benchmark boundaries using a greedy match within a configurable `tolerance_secs` window (default 15 s). Precision = matched / predicted; Recall = matched / expected; F1 = harmonic mean.
 
 **Query-type breakdown** — all three retrieval metrics (Recall@K for each K, MRR) computed separately for each `query_type` (`factual`, `conceptual`, `temporal`, `slide-ref`) and for `_overall`. Useful for diagnosing which query categories drive score differences.
 

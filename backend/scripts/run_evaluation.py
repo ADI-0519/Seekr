@@ -37,7 +37,10 @@ def main(argv=None) -> None:
         "--sentences-json", type=Path, default=None, help="override default sentences.json path"
     )
     parser.add_argument(
-        "--gold-retrieval", type=Path, default=None, help="override default retrieval gold path"
+        "--gold-retrieval",
+        type=Path,
+        default=None,
+        help="override the default retrieval benchmark data path",
     )
     parser.add_argument(
         "--use-hyde",
@@ -69,7 +72,7 @@ def main(argv=None) -> None:
         sys.exit(1)
 
     print()
-    print("Running evaluation:")
+    print("Running retrieval quality benchmark:")
     print(f"  sentences:    {sentences_path}")
     print(f"  retrieval:    {gold_retrieval_path}")
     print(f"  segmentation: {_GOLD_SEGMENTATION}")

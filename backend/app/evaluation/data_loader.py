@@ -19,7 +19,7 @@ def load_retrieval_gold(path: str | Path) -> list[GroundTruthQuery]:
     try:
         queries = [GroundTruthQuery.model_validate(item) for item in raw]
     except ValidationError as exc:
-        raise ValueError(f"Invalid retrieval gold data in {path}: {exc}") from exc
+        raise ValueError(f"Invalid retrieval benchmark data in {path}: {exc}") from exc
 
     ids = [q.query_id for q in queries]
     duplicates = {qid for qid in ids if ids.count(qid) > 1}
@@ -34,7 +34,7 @@ def load_segmentation_gold(path: str | Path) -> list[SegmentationGoldLabel]:
     try:
         labels = [SegmentationGoldLabel.model_validate(item) for item in raw]
     except ValidationError as exc:
-        raise ValueError(f"Invalid segmentation gold data in {path}: {exc}") from exc
+        raise ValueError(f"Invalid segmentation benchmark data in {path}: {exc}") from exc
 
     video_ids = [label.video_id for label in labels]
     duplicates = {vid for vid in video_ids if video_ids.count(vid) > 1}

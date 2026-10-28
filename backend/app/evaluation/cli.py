@@ -45,10 +45,16 @@ def _merge_requirements(*paths: str) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.evaluation.cli")
     parser.add_argument(
-        "--gold-retrieval", metavar="PATH", default=None, help="path to retrieval gold JSON"
+        "--gold-retrieval",
+        metavar="PATH",
+        default=None,
+        help="path to retrieval benchmark JSON",
     )
     parser.add_argument(
-        "--gold-segmentation", metavar="PATH", default=None, help="path to segmentation gold JSON"
+        "--gold-segmentation",
+        metavar="PATH",
+        default=None,
+        help="path to segmentation benchmark JSON",
     )
     parser.add_argument(
         "--sentences-json",

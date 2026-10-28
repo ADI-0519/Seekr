@@ -3,9 +3,10 @@ from unittest.mock import patch
 import pytest
 from app.core.firebase_auth import require_firebase_user
 from app.core.rate_limit import limiter
+from app.crud.video import VideoService
 from app.db.session import Base, get_db
 from app.main import app
-from app.models.video import ProcessingJob, ProcessingStatus, Video
+from app.models.video import ProcessingJob, ProcessingStatus, SlideFrame, Video
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -83,6 +84,48 @@ async def seeded_videos(db):
 
 
 class TestVideoOwnerScoping:
+    @pytest.mark.asyncio
+    async def test_storage_keys_are_scoped_to_their_owning_user(self, db):
+        mine = Video(
+            title="Mine",
+            owner_uid="user-1",
+            status=ProcessingStatus.COMPLETE.value,
+            storage_path="videos/1/original.mp4",
+            audio_path="audio/1/audio.wav",
+            thumbnail_path="thumbnails/1/thumb.jpg",
+        )
+        theirs = Video(
+            title="Theirs",
+            owner_uid="user-2",
+            status=ProcessingStatus.COMPLETE.value,
+            storage_path="videos/2/private.mp4",
+        )
+        db.add_all([mine, theirs])
+        await db.flush()
+        db.add(
+            SlideFrame(
+                video_id=mine.id,
+                frame_path="slides/1/frame.jpg",
+                start_time=0.0,
+                end_time=1.0,
+            )
+        )
+        await db.commit()
+
+        repo = VideoService(db)
+
+        for key in (
+            mine.storage_path,
+            mine.audio_path,
+            mine.thumbnail_path,
+            "slides/1/frame.jpg",
+        ):
+            assert key is not None
+            assert await repo.owns_storage_key(key, "user-1") is True
+
+        assert await repo.owns_storage_key("videos/2/private.mp4", "user-1") is False
+        assert await repo.owns_storage_key("videos/1/unknown.mp4", "user-1") is False
+
     @pytest.mark.asyncio
     async def test_list_only_returns_authenticated_owner_videos(
         self, client, auth_user, seeded_videos

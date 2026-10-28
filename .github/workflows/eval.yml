@@ -1,36 +1,81 @@
-name: eval
+name: Retrieval quality benchmark
 
 on:
   workflow_dispatch:
     inputs:
       finetune_task_id:
-        description: ClearML task ID from a completed finetune run (leave blank for baseline only)
+        description: Optional ClearML task ID containing a fine-tuned model artifact
         required: false
+        type: string
         default: ""
+      use_hyde:
+        description: Enable HyDE query expansion
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ml-evaluation
+  cancel-in-progress: false
 
 jobs:
-  eval:
-    runs-on: self-hosted
+  dispatch-evaluation:
+    name: Validate benchmark and dispatch to ClearML
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: evaluation
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      CLEARML_API_ACCESS_KEY: ${{ secrets.CLEARML_API_ACCESS_KEY }}
+      CLEARML_API_SECRET_KEY: ${{ secrets.CLEARML_API_SECRET_KEY }}
+      CLEARML_API_HOST: ${{ secrets.CLEARML_API_HOST }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: install deps
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements_dev.txt
+      - name: Install dispatch dependencies
         run: |
-          pip install -e ".[dev]" --break-system-packages --quiet
-          pip install gdown --break-system-packages --quiet
-
-      - name: download eval artifacts
+          python -m pip install --upgrade pip
+          pip install -r requirements_dev.txt clearml gdown
+      - name: Validate benchmark code
+        run: >-
+          pytest -q
+          tests/test_eval_schemas.py
+          tests/test_eval_report.py
+          tests/test_eval_cli_smoke.py
+      - name: Download benchmark data
         run: python scripts/download_artifacts.py --eval
-
-      - name: eval data tests
-        run: pytest tests/test_eval_integration.py -v
-
-      - name: run full evaluation
+      - name: Check benchmark data for identifying information
+        run: python scripts/validate_benchmark_data.py
+      - name: Dispatch benchmark
+        shell: bash
         run: |
-          TASK_ARG=""
-          if [ -n "${{ inputs.finetune_task_id }}" ]; then
-            TASK_ARG="--finetune-task-id ${{ inputs.finetune_task_id }}"
+          args=(
+            --remote
+            --clearml-task-name "evaluation-${GITHUB_RUN_ID}"
+            --output-dir evaluation_output/results
+          )
+          if [[ -n "${{ inputs.finetune_task_id }}" ]]; then
+            args+=(--finetune-task-id "${{ inputs.finetune_task_id }}")
           fi
-          python scripts/run_evaluation.py \
-            --clearml-task-name evaluation-ci \
-            $TASK_ARG
+          if [[ "${{ inputs.use_hyde }}" == "true" ]]; then
+            args+=(--use-hyde)
+          fi
+          python scripts/run_evaluation.py "${args[@]}"
+      - name: Upload dispatch metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: clearml-evaluation-${{ github.run_id }}
+          path: backend/evaluation_output/results/clearml_task_id.txt
+          if-no-files-found: error
+          retention-days: 14

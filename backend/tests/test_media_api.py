@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.api.media import get_storage, router
 from app.core.firebase_auth import get_authenticated_user
+from app.db.session import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -22,6 +23,9 @@ class _FakeStorage:
         self.last_key: str | None = None
         self.last_range: str | None = None
 
+    def sanitize_key(self, key: str) -> str:
+        return key
+
     def get_object_stream(self, key: str, range_header: str | None = None):
         self.last_key = key
         self.last_range = range_header
@@ -31,10 +35,27 @@ class _FakeStorage:
         return self.response
 
 
+class _FakeResult:
+    def __init__(self, owned: bool) -> None:
+        self.owned = owned
+
+    def scalar_one_or_none(self):
+        return 1 if self.owned else None
+
+
+class _FakeDb:
+    def __init__(self, owned: bool) -> None:
+        self.owned = owned
+
+    async def execute(self, _statement):
+        return _FakeResult(self.owned)
+
+
 def _build_client(
     *,
     auth_user: dict | None,
     storage: _FakeStorage,
+    owned: bool = True,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api")
@@ -45,8 +66,12 @@ def _build_client(
     def _override_storage():
         return storage
 
+    async def _override_db():
+        yield _FakeDb(owned)
+
     app.dependency_overrides[get_authenticated_user] = _override_auth
     app.dependency_overrides[get_storage] = _override_storage
+    app.dependency_overrides[get_db] = _override_db
     return TestClient(app)
 
 
@@ -71,6 +96,19 @@ def test_proxy_media_returns_404_when_storage_raises():
     assert response.status_code == 404
     assert response.json()["detail"] == "File not found"
     assert storage.last_key == "videos/1/missing.mp4"
+
+
+def test_proxy_media_rejects_storage_key_not_owned_by_authenticated_user():
+    storage = _FakeStorage(
+        response=(_FakeBody([b"private"]), "video/mp4", 7, None),
+    )
+    client = _build_client(auth_user={"uid": "u1"}, storage=storage, owned=False)
+
+    response = client.get("/api/media/videos/2/private.mp4")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "File not found"
+    assert storage.last_key is None
 
 
 def test_proxy_media_streams_full_content_with_headers():

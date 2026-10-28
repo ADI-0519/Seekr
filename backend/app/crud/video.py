@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import case, delete, func, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,6 +49,24 @@ class VideoService:
         stmt = with_owner_scope(select(Video).where(Video.id == id), owner_uid)
         res = await self.db.execute(stmt)
         return res.scalar_one_or_none()
+
+    async def owns_storage_key(self, key: str, owner_uid: str) -> bool:
+        """Return whether a storage object is referenced by one of the owner's videos."""
+        stmt = (
+            select(Video.id)
+            .where(
+                Video.owner_uid == owner_uid,
+                or_(
+                    Video.storage_path == key,
+                    Video.audio_path == key,
+                    Video.thumbnail_path == key,
+                    Video.slide_frames.any(SlideFrame.frame_path == key),
+                ),
+            )
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none() is not None
 
     async def get_completed_by_url(self, url: str, owner_uid=OWNER_UNSCOPED):
         # exact URL match on completed videos only, no point returning a failed or in-progress one

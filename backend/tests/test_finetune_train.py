@@ -8,9 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-import torch
 from app.finetune.dataset import TripletExample
 
+torch = pytest.importorskip("torch")
 sentence_transformers = pytest.importorskip("sentence_transformers")
 train_module = pytest.importorskip("app.finetune.train")
 
@@ -25,7 +25,7 @@ InputExample = sentence_transformers.InputExample
 pytestmark = pytest.mark.integration
 
 
-class _TinyModel(torch.nn.Module):
+class _TinyModel(torch.nn.Module):  # type: ignore[name-defined]
     # minimal SentenceTransformer-compatible model for tests
     def __init__(self, dim=8):
         super().__init__()

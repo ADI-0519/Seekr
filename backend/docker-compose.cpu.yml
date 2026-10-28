@@ -12,3 +12,17 @@ services:
       WHISPER_DEVICE: cpu
       NVIDIA_VISIBLE_DEVICES: ""
       NVIDIA_DRIVER_CAPABILITIES: ""
+
+  celery_worker_transcription:
+    gpus: !reset null
+    environment:
+      WHISPER_DEVICE: cpu
+      NVIDIA_VISIBLE_DEVICES: ""
+      NVIDIA_DRIVER_CAPABILITIES: ""
+
+  celery_worker_retrieval:
+    gpus: !reset null
+    environment:
+      WHISPER_DEVICE: cpu
+      NVIDIA_VISIBLE_DEVICES: ""
+      NVIDIA_DRIVER_CAPABILITIES: ""

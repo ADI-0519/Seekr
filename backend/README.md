@@ -25,19 +25,19 @@ The backend is responsible for API delivery, job orchestration, storage integrat
 
 From `backend/`:
 
-### Auto-select
+### CPU (default)
 
 ```bash
 bash scripts/start.sh
 ```
 
-### Force CPU
+The no-argument form defaults to CPU mode so it works on machines without NVIDIA container support. The explicit equivalent is:
 
 ```bash
 bash scripts/start.sh cpu
 ```
 
-### Force GPU
+### GPU
 
 ```bash
 bash scripts/start.sh gpu

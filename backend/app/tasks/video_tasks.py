@@ -93,8 +93,9 @@ def preload_models(**kwargs):  # load models into GPU memory at startup so first
     if not queues or "slides" in queues:
         try:
             import easyocr
+            import torch
 
-            reader = easyocr.Reader(["en"], gpu=True)
+            reader = easyocr.Reader(["en"], gpu=torch.cuda.is_available())
             import numpy as np
 
             reader.readtext(np.zeros((64, 64, 3), dtype=np.uint8))

@@ -35,11 +35,11 @@ cd backend
 bash scripts/start.sh
 ```
 
-`start.sh` cleans the HF cache, builds Docker images, downloads BGE-M3 and EasyOCR models, optionally exports the fine-tuned embedding checkpoint from ClearML, then brings the stack up. First run takes a few minutes for the model downloads.
+`start.sh` cleans the HF cache, builds Docker images, downloads BGE-M3 and EasyOCR models, optionally exports the fine-tuned embedding checkpoint from ClearML, then brings the stack up. First run takes a few minutes for the model downloads. It defaults to CPU mode so the quick start does not require NVIDIA container support.
 
 ```bash
-bash scripts/start.sh cpu   # force CPU mode
-bash scripts/start.sh gpu   # force GPU mode
+bash scripts/start.sh cpu   # CPU mode (also the default)
+bash scripts/start.sh gpu   # GPU mode; requires NVIDIA container support
 ```
 
 ### Frontend
@@ -79,15 +79,17 @@ Seekr/
 └── scripts/                repo-level helpers
 ```
 
-## Evaluation
+## Retrieval Quality Benchmark
 
-Seekr includes a reproducible evaluation pipeline for retrieval and topic segmentation. It compares dense, sparse, OCR-aware, context-aware, and fine-tuned configurations using Hit@K, MRR, and Seg-F1, with retrieval results broken down by factual, conceptual, temporal, and slide-reference queries.
+Seekr includes a reproducible retrieval quality benchmark covering retrieval and topic segmentation. It compares dense, sparse, OCR-aware, context-aware, and fine-tuned configurations using Hit@K, MRR, and Seg-F1, with retrieval results broken down by factual, conceptual, temporal, and slide-reference queries.
 
-The original benchmark datasets and result artifacts are not included in this repository. The evaluation framework, metric implementations, report generation, fixtures format, and extension guide are documented in [`backend/app/evaluation/README.md`](backend/app/evaluation/README.md).
+The benchmark data and result artifacts are not included in this repository. Remote runs send benchmark transcript text, labels, queries, and selected model artifacts to ClearML. Real user content must not be used unless that external transfer is explicitly authorised. The evaluation framework, metric implementations, report generation, data format, privacy check, and extension guide are documented in [`backend/app/evaluation/README.md`](backend/app/evaluation/README.md).
 
 ## Fine-tuning
 
 The training pipeline generates synthetic queries from lecture transcripts, builds structure-aware hard-negative triplets, and fine-tunes BGE-M3 with contrastive loss. It supports local execution and ClearML orchestration, records the run configuration and git state, and produces separate best and final checkpoints. See [`backend/scripts/run_finetune_pipeline.py`](backend/scripts/run_finetune_pipeline.py) for the available options.
+
+To start the application with an approved fine-tuned model, provide its ClearML task ID through the deployment environment, for example `FINETUNE_TASK_ID=<task-id> ./scripts/start.sh cpu`. If the variable is unset, Seekr uses the base embedding model.
 
 ## Testing
 
