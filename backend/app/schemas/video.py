@@ -53,18 +53,18 @@ class LinkSubmitRequest(BaseModel):
             r"(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})",
             r"(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]{11})",
         ]
-        keats_patterns = [
+        kaltura_patterns = [
             r"https?://kaf\.keats\.kcl\.ac\.uk/browseandembed/index/media-redirect/entryid/([a-zA-Z0-9_]+)",
             r"https?://[\w.-]*kaltura\.com/.+/entryId/([a-zA-Z0-9_]+)",
         ]
-        if not any(re.search(p, v) for p in youtube_patterns + keats_patterns):
-            raise ValueError("Unsupported URL. Paste a YouTube or Keats link.")
+        if not any(re.search(p, v) for p in youtube_patterns + kaltura_patterns):
+            raise ValueError("Unsupported URL. Paste a YouTube or Kaltura link.")
 
         # re.search matches anywhere in the string
         parsed = urlparse(v if "://" in v else f"https://{v}")
         host = parsed.netloc.lower()
         if host not in _ALLOWED_VIDEO_DOMAINS and not host.endswith(".kaltura.com"):
-            raise ValueError("Unsupported URL. Paste a YouTube or Keats link.")
+            raise ValueError("Unsupported URL. Paste a YouTube or Kaltura link.")
         return v
 
 

@@ -7,7 +7,6 @@ Seekr is designed so the frontend and backend can be deployed independently.
 ## Frontend
 
 - Hosted on Vercel
-- Live URL: [seek-r.vercel.app](https://seek-r.vercel.app)
 
 The frontend expects a reachable backend API and valid Firebase configuration.
 

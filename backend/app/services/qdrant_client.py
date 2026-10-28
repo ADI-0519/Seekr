@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import random
 
@@ -8,6 +7,7 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     MatchValue,
+    Modifier,
     PointStruct,
     SparseVector,
     SparseVectorParams,
@@ -20,9 +20,9 @@ settings = get_settings()
 log = logging.getLogger(__name__)
 
 
-# Generate a deterministic hash for BM25 token indices to ensure consistency across pipeline stages
-def token_index(token: str) -> int:
-    return int(hashlib.sha1(token.encode()).hexdigest(), 16) % (2**20)
+def to_sparse_vector(weights: dict[int, float]) -> SparseVector:
+    """Convert FastEmbed's sparse mapping into Qdrant's wire model."""
+    return SparseVector(indices=list(weights), values=[float(weights[i]) for i in weights])
 
 
 # Manage connections and operations for the Qdrant vector database
@@ -54,8 +54,12 @@ class QdrantService:
         if self.collection in existing:
             info = self.client.get_collection(self.collection)
             sparse = info.config.params.sparse_vectors or {}
-            if "bm25" not in sparse:
-                log.warning("collection %s missing bm25 sparse config, recreating", self.collection)
+            bm25_config = sparse.get("bm25")
+            if bm25_config is None or bm25_config.modifier != Modifier.IDF:
+                log.warning(
+                    "collection %s has an incompatible bm25 config; recreating it",
+                    self.collection,
+                )
                 self.client.delete_collection(self.collection)
             else:
                 return
@@ -63,30 +67,21 @@ class QdrantService:
         self.client.create_collection(
             collection_name=self.collection,
             vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE),
-            sparse_vectors_config={"bm25": SparseVectorParams()},
+            sparse_vectors_config={
+                "bm25": SparseVectorParams(modifier=Modifier.IDF),
+            },
         )
 
     # Batch upload text chunks alongside their dense and sparse vector embeddings
     def upsert_chunks(self, chunks: list[dict]) -> None:
         points = []
         for chunk in chunks:
-            token_weights = chunk["sparse_vector"]
-
-            # Aggregate weights for tokens that resolve to the same hash index
-            merged: dict[int, float] = {}
-            for token, weight in token_weights.items():
-                idx = token_index(token)
-                merged[idx] = merged.get(idx, 0.0) + float(weight)
-
-            indices = list(merged.keys())
-            values = list(merged.values())
-
             points.append(
                 PointStruct(
                     id=chunk["id"],
                     vector={
                         "": chunk["vector"],
-                        "bm25": SparseVector(indices=indices, values=values),
+                        "bm25": to_sparse_vector(chunk["sparse_vector"]),
                     },
                     payload=chunk["payload"],
                 )
@@ -142,21 +137,13 @@ class QdrantService:
 
     # Perform exact keyword matches using BM25 sparse vectors
     def search_chunks_sparse(
-        self, video_id: int, bm25_weights: dict[str, float], top_k: int = 10
+        self, video_id: int, bm25_weights: dict[int, float], top_k: int = 10
     ) -> list[dict]:
         f = Filter(must=[FieldCondition(key="video_id", match=MatchValue(value=video_id))])
 
-        merged: dict[int, float] = {}
-        for token, weight in bm25_weights.items():
-            idx = token_index(token)
-            merged[idx] = merged.get(idx, 0.0) + float(weight)
-
-        indices = list(merged.keys())
-        values = list(merged.values())
-
         response = self.client.query_points(
             collection_name=self.collection,
-            query=SparseVector(indices=indices, values=values),
+            query=to_sparse_vector(bm25_weights),
             using="bm25",
             query_filter=f,
             limit=top_k,

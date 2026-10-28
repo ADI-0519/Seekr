@@ -24,7 +24,9 @@ from app.services.video_acquisition import (
 log = logging.getLogger(__name__)
 
 _settings = get_settings()
-_sync_url = _settings.database_url.replace("+asyncpg", "")
+_sync_url = _settings.database_url.replace(
+    "postgresql+asyncpg://", "postgresql+psycopg2://", 1
+)
 _sync_engine = create_engine(_sync_url, pool_pre_ping=True)
 SyncSession = sessionmaker(bind=_sync_engine)
 embedder_singleton = None

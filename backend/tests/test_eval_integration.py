@@ -55,7 +55,7 @@ def mock_embed_svc(vector_size: int = 1024) -> MagicMock:
         return [[rng.random() for _ in range(vector_size)] for _ in texts]
 
     mock.embed_texts.side_effect = fake_embed
-    mock.bm25_encode.side_effect = lambda texts: [{"word": 1.0}] * len(texts)
+    mock.bm25_encode.side_effect = lambda texts: [{101: 1.0}] * len(texts)
     return mock
 
 

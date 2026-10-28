@@ -5,6 +5,7 @@ MODELS = [
     "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
     "BAAI/bge-m3",
     "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "Qdrant/bm25",
 ]
 
 

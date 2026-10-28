@@ -86,7 +86,7 @@ def mock_services(
 
     mock_embed = MagicMock()
     mock_embed.embed_texts.side_effect = lambda texts: [[0.1] * 1024 for _ in texts]
-    mock_embed.bm25_encode.side_effect = lambda texts: [{"word": 1.0} for _ in texts]
+    mock_embed.bm25_encode.side_effect = lambda texts: [{101: 1.0} for _ in texts]
 
     mock_qdrant = MagicMock()
     mock_qdrant.collection = "test_collection"
@@ -421,7 +421,7 @@ class TestRunnerModelSelection:
 
         mock_finetuned = MagicMock()
         mock_finetuned.embed_texts.side_effect = lambda texts: [[0.9] * 1024 for _ in texts]
-        mock_finetuned.bm25_encode.side_effect = lambda texts: [{"word": 1.0} for _ in texts]
+        mock_finetuned.bm25_encode.side_effect = lambda texts: [{101: 1.0} for _ in texts]
 
         runner = EvaluationRunner(
             cast(ChunkingService, mock_chunking),

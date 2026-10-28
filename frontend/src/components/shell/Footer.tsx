@@ -35,7 +35,7 @@ const FOOTER_COLUMNS = [
     {
         title: 'Resources',
         items: [
-            { label: 'GitHub', href: 'https://github.kcl.ac.uk/k23149795/seekr' },
+            { label: 'GitHub', href: 'https://github.com/ADI-0519/Seekr' },
         ],
     },
 ] as const;

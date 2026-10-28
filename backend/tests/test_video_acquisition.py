@@ -13,11 +13,11 @@ from app.services.video_acquisition import (
     VideoMetadata,
     VideoValidationError,
     check_file_has_audio,
-    extract_keats_entry_id,
+    extract_kaltura_entry_id,
     extract_youtube_id,
     get_video_duration,
     infer_video_content_type,
-    is_keats_url,
+    is_kaltura_url,
     is_youtube_url,
     measure_file_size,
     validate_file_extension,
@@ -56,7 +56,7 @@ class TestValidateUrl:
         assert validate_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         assert validate_url("https://youtu.be/dQw4w9WgXcQ")
 
-    def test_valid_keats_urls(self):
+    def test_valid_kaltura_urls(self):
         assert validate_url(
             "https://kaf.keats.kcl.ac.uk/browseandembed/index/media-redirect/entryid/1_94h3gplf/showDescription/false"
         )
@@ -73,24 +73,24 @@ class TestValidateUrl:
         assert not validate_url(None)  # type: ignore[arg-type]
 
 
-class TestKeatsUrlValidation:
-    def test_standard_keats_embed_url(self):
+class TestKalturaUrlValidation:
+    def test_standard_kaltura_embed_url(self):
         url = "https://kaf.keats.kcl.ac.uk/browseandembed/index/media-redirect/entryid/1_94h3gplf/showDescription/false/showTitle/false"
-        assert is_keats_url(url)
+        assert is_kaltura_url(url)
 
     def test_extract_entry_id(self):
         url = "https://kaf.keats.kcl.ac.uk/browseandembed/index/media-redirect/entryid/1_l31aczhm/showDescription/false"
-        assert extract_keats_entry_id(url) == "1_l31aczhm"
+        assert extract_kaltura_entry_id(url) == "1_l31aczhm"
 
     def test_kaltura_direct_url(self):
         url = "https://cdnapisec.kaltura.com/p/123/playManifest/entryId/1_abc123/format/url"
-        assert is_keats_url(url)
+        assert is_kaltura_url(url)
 
     def test_invalid_urls(self):
-        assert not is_keats_url("https://youtube.com/watch?v=abc")
-        assert not is_keats_url("https://example.com/video")
-        assert not is_keats_url("")
-        assert not is_keats_url(None)  # type: ignore[arg-type]
+        assert not is_kaltura_url("https://youtube.com/watch?v=abc")
+        assert not is_kaltura_url("https://example.com/video")
+        assert not is_kaltura_url("")
+        assert not is_kaltura_url(None)  # type: ignore[arg-type]
 
 
 class TestFileExtensionValidation:
@@ -282,7 +282,7 @@ class TestVideoDownloader:
         dl.cleanup()
 
     @patch("yt_dlp.YoutubeDL")
-    def test_auth_error_for_keats_url(self, mock_ydl_class):
+    def test_auth_error_for_kaltura_url(self, mock_ydl_class):
         import yt_dlp
 
         mock_ydl = MagicMock()

@@ -10,5 +10,5 @@ export const ROUTES = {
   CHANGELOG: '/info/changelog',
   HOW_IT_WORKS: '/info/how-it-works',
 
-  GITHUB: 'https://github.kcl.ac.uk/k23149795/seekr',
+  GITHUB: 'https://github.com/ADI-0519/Seekr',
 } as const;

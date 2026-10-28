@@ -14,6 +14,14 @@ def embed_svc():
     return svc, mock_model
 
 
+@pytest.fixture
+def sparse_svc():
+    svc = EmbeddingService()
+    model = MagicMock()
+    svc._sparse_model = model
+    return svc, model
+
+
 def test_embed_texts_returns_correct_dims(embed_svc):
     svc, mock_model = embed_svc
     mock_model.encode.return_value = {"dense_vecs": [[0.1] * 1024, [0.2] * 1024]}
@@ -42,8 +50,17 @@ def test_embed_texts_batching(embed_svc):
     assert mock_model.encode.call_count == 3
 
 
-def test_bm25_encode_basic():
-    svc = EmbeddingService()
+def sparse_embedding(values):
+    embedding = MagicMock()
+    embedding.as_dict.return_value = values
+    return embedding
+
+
+def test_bm25_encode_basic(sparse_svc):
+    svc, model = sparse_svc
+    model.embed.return_value = iter(
+        [sparse_embedding({101: 1.2, 202: 0.8}), sparse_embedding({303: 1.1})]
+    )
     results = svc.bm25_encode(
         [
             "gradient descent optimises the loss",
@@ -53,9 +70,9 @@ def test_bm25_encode_basic():
 
     assert len(results) == 2
     assert isinstance(results[0], dict)
-    assert "gradient" in results[0]
-    assert results[0]["gradient"] > 0
-    assert "learning" in results[1]
+    assert results[0] == {101: 1.2, 202: 0.8}
+    assert results[1] == {303: 1.1}
+    model.embed.assert_called_once()
 
 
 def test_bm25_encode_empty_input():
@@ -63,8 +80,9 @@ def test_bm25_encode_empty_input():
     assert svc.bm25_encode([]) == []
 
 
-def test_bm25_encode_weights_positive():
-    svc = EmbeddingService()
+def test_bm25_encode_weights_positive(sparse_svc):
+    svc, model = sparse_svc
+    model.embed.return_value = iter([sparse_embedding({101: 1.2}), sparse_embedding({202: 0.7})])
     results = svc.bm25_encode(
         [
             "neural networks learn representations from data",
@@ -77,11 +95,26 @@ def test_bm25_encode_weights_positive():
             assert val > 0
 
 
-def test_bm25_encode_single_doc():
-    svc = EmbeddingService()
+def test_bm25_encode_single_doc(sparse_svc):
+    svc, model = sparse_svc
+    model.embed.return_value = iter([sparse_embedding({101: 1.0})])
     results = svc.bm25_encode(["neural networks are great"])
     assert len(results) == 1
-    assert isinstance(results[0], dict)
+    assert results[0] == {101: 1.0}
+
+
+def test_bm25_uses_same_model_across_calls(sparse_svc):
+    svc, model = sparse_svc
+    model.embed.side_effect = [
+        iter([sparse_embedding({101: 1.0})]),
+        iter([sparse_embedding({101: 0.5})]),
+    ]
+
+    document = svc.bm25_encode(["backpropagation lecture"])[0]
+    query = svc.bm25_encode(["backpropagation"])[0]
+
+    assert set(document) & set(query) == {101}
+    assert model.embed.call_count == 2
 
 
 def test_embedding_import_error_graceful():

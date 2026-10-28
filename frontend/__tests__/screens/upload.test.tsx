@@ -55,7 +55,7 @@ describe('UploadModalScreen Integration', () => {
 
         expect(getByText(/Select your video file/i)).toBeTruthy();
         expect(getByText(/MP4, MOV, MKV, or WEBM/i)).toBeTruthy();
-        expect(getByPlaceholderText(/Paste a YouTube or Keats link/i)).toBeTruthy();
+        expect(getByPlaceholderText(/Paste a YouTube or Kaltura link/i)).toBeTruthy();
     });
 
     it('rejects files that are too large', async () => {

@@ -88,7 +88,7 @@ def test_pipeline_qdrant_payload_shape(sync_db):
 
     mock_embed = MagicMock()
     mock_embed.embed_texts.return_value = [[0.1] * 1024 for _ in chunks]
-    mock_embed.bm25_encode.return_value = [{"word": 1.0} for _ in chunks]
+    mock_embed.bm25_encode.return_value = [{101: 1.0} for _ in chunks]
 
     mock_qdrant = MagicMock()
 

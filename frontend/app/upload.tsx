@@ -356,7 +356,7 @@ export default function UploadModalScreen() {
                                         <LinkIcon color={themeColors.textSecondary} size={18} style={styles.inputIcon} />
                                         <TextInput
                                             style={[styles.textInputRaw, webInputReset]}
-                                            placeholder="Paste a YouTube or Keats link..."
+                                            placeholder="Paste a YouTube or Kaltura link..."
                                             placeholderTextColor={themeColors.textSecondary}
                                             value={youtubeUrl}
                                             onChangeText={setYoutubeUrl}

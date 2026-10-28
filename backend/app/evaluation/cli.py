@@ -313,8 +313,6 @@ def main(argv: list[str] | None = None) -> None:
                         # fall back to uploading from local disk if task was archived/deleted
                         _FT_CANDIDATES = [
                             pathlib.Path(__file__).parents[3] / "runs/finetune/model/best/best",
-                            pathlib.Path.home()
-                            / "LectureFind/backend/runs/finetune/model/best/best",
                         ]
                         _ft_found = next((p for p in _FT_CANDIDATES if p.exists()), None)
                         if _ft_found:

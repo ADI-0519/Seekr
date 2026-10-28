@@ -24,7 +24,7 @@ def mock_backends():
         patch("app.services.retrieval.QdrantService") as qdrant,
     ):
         emb.return_value.embed_texts.return_value = [[0.1] * 1024]
-        emb.return_value.bm25_encode.return_value = [{"query": 1.0}]
+        emb.return_value.bm25_encode.return_value = [{101: 1.0}]
         qdrant.return_value.search_chunks.return_value = []
         qdrant.return_value.search_chunks_sparse.return_value = []
         yield emb, qdrant

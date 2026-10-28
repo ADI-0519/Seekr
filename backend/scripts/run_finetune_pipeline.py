@@ -173,12 +173,7 @@ def main(argv=None) -> None:
     parser.add_argument("--no-prebuilt-data", dest="use_prebuilt_data", action="store_false")
     parser.set_defaults(use_prebuilt_data=True)
     parser.add_argument("--video-ids", type=str, default=None)
-    _local_bge = Path(
-        "/root/LectureFind/.cache/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181"
-    )
-    parser.add_argument(
-        "--base-model", type=str, default=str(_local_bge) if _local_bge.exists() else "BAAI/bge-m3"
-    )
+    parser.add_argument("--base-model", type=str, default="BAAI/bge-m3")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--grad-accum", type=int, default=1)

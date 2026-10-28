@@ -14,7 +14,7 @@ def make_chunk(chunk_id, video_id, text="test text", start=0.0, end=30.0, pos="b
     return {
         "id": chunk_id,
         "vector": [0.1] * 1024,
-        "sparse_vector": {"test": 1.0, "word": 0.8},
+        "sparse_vector": {101: 1.0, 202: 0.8},
         "payload": {
             "video_id": video_id,
             "text": text,
@@ -66,7 +66,7 @@ def test_search_returns_correct_fields(qdrant_service):
     chunk = {
         "id": 9999,
         "vector": [0.5] * 1024,
-        "sparse_vector": {"backpropagation": 2.1, "gradient": 1.8},
+        "sparse_vector": {303: 2.1, 404: 1.8},
         "payload": {
             "video_id": 42,
             "text": "backpropagation computes gradients",

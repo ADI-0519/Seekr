@@ -61,8 +61,8 @@ YOUTUBE_PATTERNS = [
     r"(?:https?://)?(?:www\.)?youtube\.com/v/([a-zA-Z0-9_-]{11})",
 ]
 
-# Regex patterns for identifying and parsing Kaltura/Keats URLs
-KEATS_PATTERNS = [
+# Regex patterns for identifying and parsing supported Kaltura URLs
+KALTURA_PATTERNS = [
     r"https?://kaf\.keats\.kcl\.ac\.uk/browseandembed/index/media-redirect/entryid/([a-zA-Z0-9_]+)",
     r"https?://[\w.-]*kaltura\.com/.+/entryId/([a-zA-Z0-9_]+)",
 ]
@@ -87,35 +87,35 @@ def extract_youtube_id(url: str) -> str | None:
     return None
 
 
-# Verify if a URL matches known Keats/Kaltura formats
-def is_keats_url(url: str) -> bool:
+# Verify if a URL matches known Kaltura formats
+def is_kaltura_url(url: str) -> bool:
     if not url:
         return False
-    for pattern in KEATS_PATTERNS:
+    for pattern in KALTURA_PATTERNS:
         if re.search(pattern, url):
             return True
     return False
 
 
-# Pull the unique media entry identifier from a Keats/Kaltura URL
-def extract_keats_entry_id(url: str) -> str | None:
-    for pattern in KEATS_PATTERNS:
+# Pull the unique media entry identifier from a Kaltura URL
+def extract_kaltura_entry_id(url: str) -> str | None:
+    for pattern in KALTURA_PATTERNS:
         match = re.search(pattern, url)
         if match:
             return match.group(1)
     return None
 
 
-_KCL_DEFAULT_PARTNER_ID = "2368101"
+_DEFAULT_KALTURA_PARTNER_ID = "2368101"
 
 
-# Transform a public Keats link into a direct Kaltura download descriptor
-def resolve_keats_url(url: str) -> str:
-    entry_id = extract_keats_entry_id(url)
+# Transform a public Kaltura link into a direct download descriptor
+def resolve_kaltura_url(url: str) -> str:
+    entry_id = extract_kaltura_entry_id(url)
     if not entry_id:
         return url
 
-    partner_id = _KCL_DEFAULT_PARTNER_ID
+    partner_id = _DEFAULT_KALTURA_PARTNER_ID
 
     # Extract the partner ID from the page source if available
     try:
@@ -128,13 +128,13 @@ def resolve_keats_url(url: str) -> str:
             log.info("discovered Kaltura partner ID: %s", partner_id)
     except Exception as e:
         log.warning(
-            "could not fetch Keats page to discover partner ID, using default: %s: %s",
+            "could not fetch Kaltura page to discover partner ID, using default: %s: %s",
             type(e).__name__,
             safe_exception_message(e),
         )
 
     resolved = f"kaltura:{partner_id}:{entry_id}"
-    log.info("resolved Keats URL to: %s", safe_url_for_log(resolved))
+    log.info("resolved Kaltura URL to: %s", safe_url_for_log(resolved))
     return resolved
 
 
@@ -145,7 +145,7 @@ def validate_url(url: str) -> bool:
     url = url.strip()
     if not url.startswith(("http://", "https://")):
         return False
-    return is_youtube_url(url) or is_keats_url(url)
+    return is_youtube_url(url) or is_kaltura_url(url)
 
 
 # Define known file signatures to verify video files regardless of extension
@@ -282,7 +282,7 @@ class VideoDownloader:
             "quiet": True,
             "no_warnings": True,
         }
-        if is_keats_url(url):
+        if is_kaltura_url(url):
             if self.cookies_path:
                 opts["cookiefile"] = self.cookies_path
             opts["http_headers"] = {"Referer": "https://kaf.keats.kcl.ac.uk/"}
@@ -290,7 +290,7 @@ class VideoDownloader:
 
     # Retrieve video information from the remote source without downloading
     def extract_metadata(self, url: str) -> dict:
-        resolved_url = resolve_keats_url(url) if is_keats_url(url) else url
+        resolved_url = resolve_kaltura_url(url) if is_kaltura_url(url) else url
         opts = {**self.base_opts(url), "extract_flat": False}
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -310,7 +310,7 @@ class VideoDownloader:
 
     # Execute the video download and verify the resulting local file
     def download(self, url: str) -> VideoMetadata:
-        resolved_url = resolve_keats_url(url) if is_keats_url(url) else url
+        resolved_url = resolve_kaltura_url(url) if is_kaltura_url(url) else url
         info = self.extract_metadata(url)
 
         title = info.get("title", "untitled")
@@ -325,7 +325,7 @@ class VideoDownloader:
         opts = {
             **self.base_opts(url),
             "format": "bv*+ba/b"
-            if is_keats_url(url)
+            if is_kaltura_url(url)
             else "bestvideo[vcodec^=avc][ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             "outtmpl": output_template,
             "quiet": False,
@@ -334,11 +334,11 @@ class VideoDownloader:
             "postprocessors": [],
             "noplaylist": True,
             "socket_timeout": 30,
-            "retries": 10 if is_keats_url(url) else 3,
-            "fragment_retries": 10 if is_keats_url(url) else 3,
+            "retries": 10 if is_kaltura_url(url) else 3,
+            "fragment_retries": 10 if is_kaltura_url(url) else 3,
         }
 
-        if is_keats_url(url):
+        if is_kaltura_url(url):
             opts["concurrent_fragment_downloads"] = 4
 
         try:

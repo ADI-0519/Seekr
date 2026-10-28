@@ -126,7 +126,7 @@ class EvaluationRunner:
         dense_vecs: list[list[float]] = embed.embed_texts(
             [str(c["context_template"]) for c in chunks]
         )
-        sparse_vecs: list[dict[str, float]] = embed.bm25_encode([str(c["text"]) for c in chunks])
+        sparse_vecs: list[dict[int, float]] = embed.bm25_encode([str(c["text"]) for c in chunks])
 
         video_id = queries[0].video_id if queries else 0
 

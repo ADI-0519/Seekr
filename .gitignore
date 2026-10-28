@@ -28,3 +28,4 @@ seekr.code-workspace
 .env.local
 backend/evaluation_output/
 !backend/evaluation_output/video_id_map.json
+backend/.venv*

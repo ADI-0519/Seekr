@@ -28,12 +28,14 @@ try:
 except ImportError:
     pass
 
+_fastembed_ok = False
+_fastembed_import_error: Exception | None = None
 try:
-    from rank_bm25 import BM25Plus
+    from fastembed import SparseTextEmbedding
 
-    _BM25_AVAILABLE = True
-except ImportError:
-    _BM25_AVAILABLE = False
+    _fastembed_ok = True
+except Exception as e:
+    _fastembed_import_error = e
 
 
 # Service to generate mathematical vector representations of text for search and retrieval
@@ -45,6 +47,7 @@ class EmbeddingService:
         # Determine the model backend based on whether the path points to a local directory
         self._use_st = os.path.isdir(self._model_path)
         self._model = None
+        self._sparse_model = None
 
     # Load the specified embedding model into GPU or CPU memory
     def load(self):
@@ -117,24 +120,33 @@ class EmbeddingService:
 
         return all_vecs
 
-    # Generate sparse lexical weights for keyword-based search
-    def bm25_encode(self, texts: list[str]) -> list[dict[str, float]]:
+    def _load_sparse_model(self):
+        if self._sparse_model is not None:
+            return self._sparse_model
+
+        if not _fastembed_ok:
+            detail = (
+                f"{type(_fastembed_import_error).__name__}: {_fastembed_import_error}"
+                if _fastembed_import_error
+                else "unknown import error"
+            )
+            raise RuntimeError(
+                "BM25 encoder unavailable. Install fastembed and rebuild the worker image. "
+                f"Import failed with {detail}."
+            ) from _fastembed_import_error
+
+        settings = get_settings()
+        self._sparse_model = SparseTextEmbedding(
+            model_name="Qdrant/bm25",
+            cache_dir=settings.hf_home or None,
+            lazy_load=True,
+        )
+        return self._sparse_model
+
+    # Generate BM25 term-frequency vectors. Qdrant applies collection-level IDF at search time.
+    def bm25_encode(self, texts: list[str]) -> list[dict[int, float]]:
         if not texts:
             return []
 
-        if not _BM25_AVAILABLE:
-            raise RuntimeError("rank_bm25 is not installed - run: pip install rank_bm25")
-
-        tokenized = [t.lower().split() for t in texts]
-        bm25 = BM25Plus(tokenized)
-
-        results = []
-        for i, tokens in enumerate(tokenized):
-            weights: dict[str, float] = {}
-            for token in set(tokens):
-                score = float(bm25.get_scores([token])[i])
-                if score > 0:
-                    weights[token] = score
-            results.append(weights)
-
-        return results
+        model = self._load_sparse_model()
+        return [embedding.as_dict() for embedding in model.embed(texts)]

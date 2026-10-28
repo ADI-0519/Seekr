@@ -17,8 +17,6 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:8081",
-        "https://www.seek-r.me",
-        "https://seek-r.me",
     ]
 
     @field_validator("allowed_origins", mode="before")
