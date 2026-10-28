@@ -218,6 +218,17 @@ class TestGpuFallback:
         )
         assert first_device == "cuda"
         assert second_device == "cpu"
+        assert MockModel.call_args_list[0].kwargs["compute_type"] == "float16"
+        assert MockModel.call_args_list[1].kwargs["compute_type"] == "int8"
+
+    def test_cpu_uses_int8_compute(self):
+        with patch("faster_whisper.WhisperModel") as MockModel:
+            svc = TranscriptionService("tiny", device="cpu")
+            svc.load_model()
+
+        MockModel.assert_called_once_with(
+            "tiny", device="cpu", compute_type="int8", local_files_only=True
+        )
 
     def test_non_cuda_error_raises(self):
         with patch("faster_whisper.WhisperModel") as MockModel:

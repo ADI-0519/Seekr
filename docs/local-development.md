@@ -67,10 +67,22 @@ For testing from a phone on the same network, replace `localhost` with your mach
 From `backend/`:
 
 ```bash
-bash scripts/start.sh
+python scripts/start.py cpu --build --setup-models
 ```
 
-`scripts/start.sh` is the current repository helper for bringing up the backend stack.
+That first-run command builds the images and initializes the shared model cache. Normal CPU starts are simply:
+
+```bash
+python scripts/start.py
+```
+
+For NVIDIA GPU workers, use:
+
+```bash
+python scripts/start.py gpu
+```
+
+The base `docker-compose.yml` is the complete CPU stack. `docker-compose.gpu.yml` only overrides the four ML workers with CUDA images and GPU access. Compose creates and retains the database, object-storage, and model-cache volumes automatically.
 
 ## Start The Frontend
 

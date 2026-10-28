@@ -113,16 +113,17 @@ class SlideExtractor:
             nonlocal last_print
             now = time.time()
             if now - last_print >= 10.0:
+                processed_frames = frame_num.frame_num
                 if total_frames > 0:
-                    pct = (frame_num / float(total_frames)) * 100.0
+                    pct = (processed_frames / float(total_frames)) * 100.0
                     log.info(
                         "Slide extraction progress: %.1f%% (%d/%d frames)",
                         pct,
-                        frame_num,
+                        processed_frames,
                         total_frames,
                     )
                 else:
-                    log.info("Slide extraction progress: %d frames processed", frame_num)
+                    log.info("Slide extraction progress: %d frames processed", processed_frames)
                 last_print = now
 
         scene_manager.detect_scenes(video, show_progress=False, callback=progress_callback)

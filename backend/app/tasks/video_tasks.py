@@ -4,7 +4,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 
-from celery import chord, shared_task
+from celery import Task, chord, shared_task
 from celery.signals import worker_ready
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.exc import IntegrityError
@@ -24,9 +24,7 @@ from app.services.video_acquisition import (
 log = logging.getLogger(__name__)
 
 _settings = get_settings()
-_sync_url = _settings.database_url.replace(
-    "postgresql+asyncpg://", "postgresql+psycopg2://", 1
-)
+_sync_url = _settings.database_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
 _sync_engine = create_engine(_sync_url, pool_pre_ping=True)
 SyncSession = sessionmaker(bind=_sync_engine)
 embedder_singleton = None
@@ -201,6 +199,46 @@ def update_video_status(
         session.commit()
 
 
+def mark_pipeline_failed(
+    session: Session,
+    video_id: int,
+    error_message: str,
+    *,
+    branch_stage: str | None = None,
+) -> None:
+    """Atomically record a terminal pipeline failure.
+
+    Branch tasks call this only after exhausting their retries. Keeping the job
+    and video updates in one transaction prevents the API from reporting a
+    failed branch alongside an indefinitely running parent job.
+    """
+    job = find_job(session, video_id)
+    if job and job.status == "cancelled":
+        return
+
+    video = session.get(Video, video_id)
+    if video is None:
+        return
+
+    completed_at = datetime.now(timezone.utc)
+    if job:
+        job.status = "failed"
+        job.current_stage = ProcessingStatus.FAILED.value
+        job.error_message = error_message
+        job.completed_at = completed_at
+        if branch_stage:
+            setattr(job, branch_stage, "failed")
+
+    video.status = ProcessingStatus.FAILED.value
+    video.error_message = error_message
+    session.commit()
+
+
+def retries_exhausted(task: Task) -> bool:
+    """Return whether the current task attempt is the final permitted attempt."""
+    return task.max_retries is not None and task.request.retries >= task.max_retries
+
+
 def handle_youtube_download(session: Session, video: Video) -> None:
     if not video.youtube_url:
         raise ValueError("No youtube_url on video")
@@ -256,7 +294,6 @@ def process_video(self, video_id: int):
                     type(e).__name__,
                     safe_message,
                 )
-                update_video_status(session, video_id, ProcessingStatus.FAILED, safe_message)
                 raise
 
         job = get_or_create_job(session, video_id, self.request.id)
@@ -291,28 +328,11 @@ def process_video(self, video_id: int):
         log.error("job failed for video %s: %s: %s", video_id, type(exc).__name__, safe_message)
         session.rollback()
 
-        if job and job.id:
-            try:
-                update_job(
-                    session,
-                    job.id,
-                    status="failed",
-                    error_message=safe_message,
-                    completed_at=datetime.now(timezone.utc),
-                )
-            except Exception as update_exc:
-                log.error(
-                    "couldnt mark job %s as failed: %s: %s",
-                    job.id,
-                    type(update_exc).__name__,
-                    safe_exception_message(update_exc),
-                )
-
         try:
-            update_video_status(session, video_id, ProcessingStatus.FAILED, safe_message)
+            mark_pipeline_failed(session, video_id, safe_message)
         except Exception as update_exc:
             log.error(
-                "couldnt mark video %s as failed: %s: %s",
+                "couldnt mark pipeline for video %s as failed: %s: %s",
                 video_id,
                 type(update_exc).__name__,
                 safe_exception_message(update_exc),
@@ -352,11 +372,12 @@ def transcribe_audio(self, video_id: int):
         return {"branch": "transcription", "status": "done"}
 
     except Exception as exc:
+        safe_message = safe_exception_message(exc, fallback="Transcription failed.")
         log.error(
             "transcribe_audio failed for video %s: %s: %s",
             video_id,
             type(exc).__name__,
-            safe_exception_message(exc),
+            safe_message,
         )
         session.rollback()
         if is_cancelled_or_deleted(session, video_id):
@@ -366,11 +387,23 @@ def transcribe_audio(self, video_id: int):
             log.info("transcribe_audio foreign-key write skipped for deleted video %s", video_id)
             return {"branch": "transcription", "status": "cancelled"}
         job_id = resolve_job_id(session, video_id)
-        if job_id:
+        if retries_exhausted(self):
+            mark_pipeline_failed(
+                session,
+                video_id,
+                safe_message,
+                branch_stage="transcription_stage",
+            )
+        elif job_id:
             try:
                 update_job(session, job_id, transcription_stage="failed")
-            except Exception:
-                pass
+            except Exception as update_exc:
+                log.error(
+                    "couldnt update transcription stage for video %s: %s: %s",
+                    video_id,
+                    type(update_exc).__name__,
+                    safe_exception_message(update_exc),
+                )
         raise self.retry(exc=exc, countdown=30)
     finally:
         session.close()
@@ -416,11 +449,12 @@ def extract_slides(self, video_id: int):
         return {"branch": "slides", "status": "done", "frame_count": count}
 
     except Exception as exc:
+        safe_message = safe_exception_message(exc, fallback="Slide extraction failed.")
         log.error(
             "extract_slides failed for video %s: %s: %s",
             video_id,
             type(exc).__name__,
-            safe_exception_message(exc),
+            safe_message,
         )
         session.rollback()
         if is_cancelled_or_deleted(session, video_id):
@@ -430,11 +464,23 @@ def extract_slides(self, video_id: int):
             log.info("extract_slides foreign-key write skipped for deleted video %s", video_id)
             return {"branch": "slides", "status": "cancelled", "frame_count": 0}
         job_id = resolve_job_id(session, video_id)
-        if job_id:
+        if retries_exhausted(self):
+            mark_pipeline_failed(
+                session,
+                video_id,
+                safe_message,
+                branch_stage="slides_stage",
+            )
+        elif job_id:
             try:
                 update_job(session, job_id, slides_stage="failed")
-            except Exception:
-                pass
+            except Exception as update_exc:
+                log.error(
+                    "couldnt update slides stage for video %s: %s: %s",
+                    video_id,
+                    type(update_exc).__name__,
+                    safe_exception_message(update_exc),
+                )
         raise self.retry(exc=exc, countdown=30)
     finally:
         session.close()
@@ -495,19 +541,15 @@ def finish_pipeline(self, video_id: int):
             safe_message,
         )
         session.rollback()
-        job = find_job(session, video_id)
-        if job:
-            try:
-                update_job(
-                    session,
-                    job.id,
-                    status="failed",
-                    error_message=safe_message,
-                    completed_at=datetime.now(timezone.utc),
-                )
-            except Exception:
-                pass
-        update_video_status(session, video_id, ProcessingStatus.FAILED, safe_message)
+        try:
+            mark_pipeline_failed(session, video_id, safe_message)
+        except Exception as update_exc:
+            log.error(
+                "couldnt mark pipeline for video %s as failed: %s: %s",
+                video_id,
+                type(update_exc).__name__,
+                safe_exception_message(update_exc),
+            )
         raise self.retry(exc=exc, countdown=30)
     finally:
         session.close()

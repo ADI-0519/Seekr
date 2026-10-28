@@ -154,6 +154,38 @@ class TestOcrCleanupDedupeRules:
 
 
 class TestSceneDetection:
+    def test_progress_callback_accepts_frame_timecode(self, tmp_path):
+        src = tmp_path / "video.mp4"
+        src.write_bytes(b"fake-video")
+
+        mock_video = MagicMock()
+        mock_video.duration.get_frames.return_value = 100
+        mock_scene_manager = MagicMock()
+        mock_scene_manager.get_scene_list.return_value = make_fake_scene_list([(0.0, 10.0)])
+
+        class FrameTimecodeLike:
+            frame_num = 50
+
+        def run_detection(_video, *, show_progress, callback):
+            assert show_progress is False
+            callback(None, FrameTimecodeLike())
+
+        mock_scene_manager.detect_scenes.side_effect = run_detection
+
+        with (
+            patch("app.services.slide_extraction.open_video", return_value=mock_video),
+            patch("app.services.slide_extraction.SceneManager", return_value=mock_scene_manager),
+            patch("app.services.slide_extraction.ContentDetector"),
+            patch("time.time", side_effect=[0.0, 11.0, 11.0]),
+            patch("app.services.slide_extraction.log") as mock_log,
+        ):
+            scenes = SlideExtractor().detect_scenes(str(src))
+
+        assert scenes == [SceneRange(start_time=0.0, end_time=10.0)]
+        mock_log.info.assert_any_call(
+            "Slide extraction progress: %.1f%% (%d/%d frames)", 50.0, 50, 100
+        )
+
     @patch("app.services.slide_extraction.subprocess.run")
     def test_scenes_parsed_correctly(self, mock_run, tmp_path):
         src = tmp_path / "video.mp4"

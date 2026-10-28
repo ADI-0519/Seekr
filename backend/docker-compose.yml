@@ -1,6 +1,39 @@
-services:
+x-worker-common: &worker-common
+  build:
+    context: .
+    dockerfile: ./app/Dockerfile
+    args:
+      INSTALL_ML: "true"
+  restart: unless-stopped
+  user: celeryuser
+  env_file:
+    - ../.env
+  environment:
+    WHISPER_DEVICE: cpu
+    NVIDIA_VISIBLE_DEVICES: ""
+    NVIDIA_DRIVER_CAPABILITIES: ""
+    HF_HUB_DISABLE_XET: "1"
+    HF_HOME: /home/celeryuser/.cache/huggingface
+    EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+  volumes:
+    - huggingface_cache:/home/celeryuser/.cache/huggingface
+    - easyocr_cache:/home/celeryuser/.EasyOCR
+    - ./runs/finetune:/models/finetuned:ro
+  depends_on:
+    db:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    qdrant:
+      condition: service_healthy
+    minio-init:
+      condition: service_completed_successfully
+    migrate:
+      condition: service_completed_successfully
 
-  # API Service
+services:
   api:
     build:
       context: .
@@ -10,6 +43,8 @@ services:
     container_name: videos_api
     ports:
       - "8000:8000"
+    env_file:
+      - ../.env
     depends_on:
       db:
         condition: service_healthy
@@ -19,43 +54,35 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
-    env_file:
-      - ../.env
-
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3).read()\"" ]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3).read()\""]
       interval: 10s
       timeout: 5s
       retries: 15
 
-  # Postgres Database
   db:
     image: postgres:15
     container_name: PostgresDB
     ports:
       - "5432:5432"
-
     environment:
-      POSTGRES_DB: SeekrDB
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-
+      POSTGRES_DB: ${POSTGRES_DB:-SeekrDB}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d SeekrDB -h 127.0.0.1" ]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-SeekrDB} -h 127.0.0.1"]
       interval: 5s
       timeout: 3s
       retries: 20
 
-  # Redis Cache
   redis:
     image: redis:alpine
     container_name: redis_cache
@@ -63,12 +90,11 @@ services:
       - "6379:6379"
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  # Qdrant Vector Database
   qdrant:
     build:
       context: ./app
@@ -82,13 +108,12 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:6333/collections || exit 1" ]
+      test: ["CMD-SHELL", "curl --fail http://localhost:6333/collections || exit 1"]
       interval: 10s
       timeout: 5s
       start_period: 60s
       retries: 30
 
-  #  MinIO Object Storage
   minio:
     build:
       context: ./docker/minio
@@ -101,13 +126,13 @@ services:
     env_file:
       - ../.env
     environment:
-      MINIO_API_CORS_ALLOW_ORIGIN: 'http://localhost:3000'
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:8081,http://localhost:3000
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "kill -0 1" ]
+      test: ["CMD-SHELL", "curl --fail http://localhost:9000/minio/health/live || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -117,187 +142,19 @@ services:
       context: ./docker/minio
       dockerfile: Dockerfile.client
     image: seekr-minio-client:RELEASE.2025-08-13T08-35-41Z
-    container_name: minio-init
+    env_file:
+      - ../.env
     depends_on:
       minio:
         condition: service_healthy
     restart: "no"
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set local http://minio:9000 minio_local minio_local_password &&
-      /usr/bin/mc mb --ignore-existing local/seekr-videos &&
-      /usr/bin/mc anonymous set none local/seekr-videos
-      "
-
-  # Celery Worker (process_video, finish_pipeline, embedding)
-  celery_worker:
-    build:
-      context: .
-      dockerfile: ./app/Dockerfile.worker-gpu
-      args:
-        INSTALL_ML: "true"
-    container_name: videos_worker
-    restart: unless-stopped
-    user: celeryuser
-    gpus: all
-    environment:
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      HF_HUB_DISABLE_XET: "1"
-      HF_HOME: /home/celeryuser/.cache/huggingface
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
-    volumes:
-      - huggingface_cache:/home/celeryuser/.cache/huggingface
-      - ./runs/finetune:/models/finetuned:ro
-      - /etc/localtime:/etc/localtime:ro
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      qdrant:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    env_file:
-      - ../.env
-    command: [ "celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "default", "--pool=solo" ]
-
-  # Celery Worker (dedicated worker for faster-whisper)
-  celery_worker_transcription:
-    build:
-      context: .
-      dockerfile: ./app/Dockerfile.worker-gpu
-      args:
-        INSTALL_ML: "true"
-    container_name: videos_worker_transcription
-    restart: unless-stopped
-    user: celeryuser
-    gpus: all
-    environment:
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      HF_HUB_DISABLE_XET: "1"
-      HF_HOME: /home/celeryuser/.cache/huggingface
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
-    volumes:
-      - huggingface_cache:/home/celeryuser/.cache/huggingface
-      - ./runs/finetune:/models/finetuned:ro
-      - /etc/localtime:/etc/localtime:ro
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      qdrant:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    env_file:
-      - ../.env
-    # CUDA can't be initialised in a forked process
-    command: [ "celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "transcription", "--pool=solo" ]
-
-  # Celery Worker (isolated for GPU/CPU-heavy extraction)
-  celery_worker_slides:
-    build:
-      context: .
-      dockerfile: ./app/Dockerfile.worker-gpu
-      args:
-        INSTALL_ML: "true"
-    container_name: videos_worker_slides
-    restart: unless-stopped
-    user: celeryuser
-    gpus: all
-    environment:
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      HF_HUB_DISABLE_XET: "1"
-      HF_HOME: /home/celeryuser/.cache/huggingface
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
-    volumes:
-      - huggingface_cache:/home/celeryuser/.cache/huggingface
-      - easyocr_cache:/home/celeryuser/.EasyOCR
-      - ./runs/finetune:/models/finetuned:ro
-      - /etc/localtime:/etc/localtime:ro
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      qdrant:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    env_file:
-      - ../.env
-    command: [ "celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "slides", "--pool=solo" ]
-
-  # Celery Worker (retrieval queue - isolated for reranking/search)
-  celery_worker_retrieval:
-    build:
-      context: .
-      dockerfile: ./app/Dockerfile.worker-gpu
-      args:
-        INSTALL_ML: "true"
-    container_name: videos_worker_retrieval
-    restart: unless-stopped
-    user: celeryuser
-    gpus: all
-    environment:
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      HF_HUB_DISABLE_XET: "1"
-      HF_HOME: /home/celeryuser/.cache/huggingface
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
-    volumes:
-      - huggingface_cache:/home/celeryuser/.cache/huggingface
-      - ./runs/finetune:/models/finetuned:ro
-      - /etc/localtime:/etc/localtime:ro
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      qdrant:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    env_file:
-      - ../.env
-    command: [ "celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "retrieval", "--pool=solo" ]
-
-  # RabbitMQ Message Broker
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "rabbitmqctl", "status" ]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-    volumes:
-      - ./advanced.config:/etc/rabbitmq/advanced.config
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        /usr/bin/mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        /usr/bin/mc mb --ignore-existing "local/$${STORAGE_BUCKET:-seekr-videos}"
+        /usr/bin/mc anonymous set none "local/$${STORAGE_BUCKET:-seekr-videos}"
 
   migrate:
     build:
@@ -310,7 +167,61 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: [ "python", "-m", "alembic", "-c", "/app/alembic.ini", "upgrade", "head" ]
+    command: ["python", "-m", "alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+    restart: "no"
+
+  celery_worker:
+    <<: *worker-common
+    container_name: videos_worker
+    command: ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "default", "--pool=solo"]
+
+  celery_worker_transcription:
+    <<: *worker-common
+    container_name: videos_worker_transcription
+    command: ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "transcription", "--pool=solo"]
+
+  celery_worker_slides:
+    <<: *worker-common
+    container_name: videos_worker_slides
+    command: ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "slides", "--pool=solo"]
+
+  celery_worker_retrieval:
+    <<: *worker-common
+    container_name: videos_worker_retrieval
+    command: ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=INFO", "-Q", "retrieval", "--pool=solo"]
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - ./advanced.config:/etc/rabbitmq/advanced.config:ro
+
+  model-init:
+    profiles: [setup]
+    build:
+      context: .
+      dockerfile: ./app/Dockerfile
+      args:
+        INSTALL_ML: "true"
+    user: "0:0"
+    environment:
+      HF_HUB_DISABLE_XET: "1"
+    volumes:
+      - huggingface_cache:/home/celeryuser/.cache/huggingface
+      - easyocr_cache:/home/celeryuser/.EasyOCR
+      - ../.cache/hf:/seed/hf
+      - ./scripts/hf_cache_init.sh:/usr/local/bin/hf_cache_init.sh:ro
+      - ./scripts/ensure_models.py:/usr/local/bin/ensure_models.py:ro
+    entrypoint: ["bash", "/usr/local/bin/hf_cache_init.sh"]
     restart: "no"
 
 volumes:
@@ -318,6 +229,6 @@ volumes:
   qdrant_data:
   minio_data:
   huggingface_cache:
-    external: true
+    name: huggingface_cache
   easyocr_cache:
-    external: true
+    name: easyocr_cache

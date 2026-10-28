@@ -97,11 +97,11 @@ def test_video_status_updated_on_failure(sync_session, video_id):
     with (
         patch.object(video_tasks, "SyncSession", return_value=sync_session),
         patch.object(video_tasks, "run_audio_extraction", side_effect=RuntimeError("GPU exploded")),
+        patch.object(video_tasks.process_video, "max_retries", 0),
         pytest.raises(Exception),
     ):
         task = video_tasks.process_video
         task.request.id = "test-fail"
-        task.max_retries = 0
         task(video_id)
 
     video = sync_session.get(Video, video_id)

@@ -32,14 +32,16 @@ Then start the stack:
 
 ```bash
 cd backend
-bash scripts/start.sh
+python scripts/start.py cpu --build --setup-models
 ```
 
-`start.sh` cleans the HF cache, builds Docker images, downloads BGE-M3 and EasyOCR models, optionally exports the fine-tuned embedding checkpoint from ClearML, then brings the stack up. First run takes a few minutes for the model downloads. It defaults to CPU mode so the quick start does not require NVIDIA container support.
+The first run builds the images and downloads the ML models. Later CPU starts only need `python scripts/start.py`; existing containers, images, and model caches are reused.
 
 ```bash
-bash scripts/start.sh cpu   # CPU mode (also the default)
-bash scripts/start.sh gpu   # GPU mode; requires NVIDIA container support
+python scripts/start.py                         # CPU mode (default)
+python scripts/start.py gpu                     # GPU mode; requires NVIDIA container support
+python scripts/start.py cpu --build              # rebuild changed images
+python scripts/start.py cpu --setup-models       # refresh the model cache
 ```
 
 ### Frontend
@@ -89,7 +91,7 @@ The benchmark data and result artifacts are not included in this repository. Rem
 
 The training pipeline generates synthetic queries from lecture transcripts, builds structure-aware hard-negative triplets, and fine-tunes BGE-M3 with contrastive loss. It supports local execution and ClearML orchestration, records the run configuration and git state, and produces separate best and final checkpoints. See [`backend/scripts/run_finetune_pipeline.py`](backend/scripts/run_finetune_pipeline.py) for the available options.
 
-To start the application with an approved fine-tuned model, provide its ClearML task ID through the deployment environment, for example `FINETUNE_TASK_ID=<task-id> ./scripts/start.sh cpu`. If the variable is unset, Seekr uses the base embedding model.
+To use an approved fine-tuned model, export it explicitly with `python scripts/export_finetuned_model.py --task-id <task-id>` before starting the stack. If no exported model is configured, Seekr uses the base embedding model.
 
 ## Testing
 

@@ -13,7 +13,9 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_OUTPUT = Path("runs/finetune/model_v4")
+# Compose mounts runs/finetune at /models/finetuned and the application reads
+# /models/finetuned/best, so the exported artifact must land directly here.
+_DEFAULT_OUTPUT = Path("runs/finetune")
 _ENV_PATH = Path("../.env")
 _CONTAINER_MODEL_PATH = "/models/finetuned/best"
 

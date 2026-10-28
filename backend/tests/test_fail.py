@@ -141,3 +141,61 @@ def test_extract_slides_failure_sets_branch_failed(sync_session, video_id):
     updated = sync_session.get(ProcessingJob, job_id)
     assert updated is not None
     assert updated.slides_stage == "failed"
+
+
+@pytest.mark.parametrize(
+    ("task_name", "runner_name", "branch_stage", "error_message"),
+    [
+        ("transcribe_audio", "run_transcription", "transcription_stage", "transcribe-fail"),
+        ("extract_slides", "run_slide_extraction", "slides_stage", "slides-fail"),
+    ],
+)
+def test_terminal_branch_failure_marks_pipeline_failed(
+    sync_session,
+    video_id,
+    task_name,
+    runner_name,
+    branch_stage,
+    error_message,
+):
+    from app.tasks import video_tasks
+
+    job = ProcessingJob(
+        video_id=video_id,
+        task_id=f"terminal-{task_name}-failure",
+        status="running",
+        current_stage="parallel_processing",
+        transcription_stage="queued",
+        slides_stage="queued",
+    )
+    sync_session.add(job)
+    sync_session.commit()
+    job_id = job.id
+
+    task = getattr(video_tasks, task_name)
+    task.push_request(retries=task.max_retries)
+    try:
+        with (
+            patch.object(video_tasks, "SyncSession", return_value=sync_session),
+            patch.object(video_tasks, runner_name, side_effect=RuntimeError(error_message)),
+            patch.object(task, "retry", side_effect=RuntimeError("retry_called")),
+            pytest.raises(RuntimeError, match="retry_called"),
+        ):
+            task(video_id)
+    finally:
+        task.pop_request()
+
+    sync_session.expire_all()
+    updated_job = sync_session.get(ProcessingJob, job_id)
+    updated_video = sync_session.get(Video, video_id)
+
+    assert updated_job is not None
+    assert updated_job.status == "failed"
+    assert updated_job.current_stage == ProcessingStatus.FAILED.value
+    assert getattr(updated_job, branch_stage) == "failed"
+    assert error_message in (updated_job.error_message or "")
+    assert updated_job.completed_at is not None
+
+    assert updated_video is not None
+    assert updated_video.status == ProcessingStatus.FAILED.value
+    assert error_message in (updated_video.error_message or "")

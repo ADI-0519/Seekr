@@ -28,20 +28,22 @@ From `backend/`:
 ### CPU (default)
 
 ```bash
-bash scripts/start.sh
+python scripts/start.py
 ```
 
-The no-argument form defaults to CPU mode so it works on machines without NVIDIA container support. The explicit equivalent is:
+The first run should build the images and initialize the model cache:
 
 ```bash
-bash scripts/start.sh cpu
+python scripts/start.py cpu --build --setup-models
 ```
 
 ### GPU
 
 ```bash
-bash scripts/start.sh gpu
+python scripts/start.py gpu --build --setup-models
 ```
+
+Normal starts reuse existing images and model caches. Add `--build` after code or dependency changes, and use `--setup-models` only when the model cache needs initializing or refreshing.
 
 For lower-level Docker commands and environment setup, see [`../docs/local-development.md`](../docs/local-development.md).
 

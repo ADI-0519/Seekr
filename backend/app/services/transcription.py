@@ -28,10 +28,14 @@ class TranscriptionService:
         if device == "auto":
             device = "cuda"
 
+        compute_type = "float16" if device == "cuda" else "int8"
+
         try:
-            # Attempt to load with high-performance GPU settings
             self._model = faster_whisper.WhisperModel(
-                self._model_name, device=device, compute_type="float16", local_files_only=True
+                self._model_name,
+                device=device,
+                compute_type=compute_type,
+                local_files_only=True,
             )
             log.info("loaded whisper model %s on %s", self._model_name, device)
         except Exception as e:

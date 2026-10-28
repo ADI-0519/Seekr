@@ -1,0 +1,24 @@
+x-gpu-worker: &gpu-worker
+  build:
+    context: .
+    dockerfile: ./app/Dockerfile.worker-gpu
+    args:
+      INSTALL_ML: "true"
+  gpus: all
+  environment:
+    WHISPER_DEVICE: cuda
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+services:
+  celery_worker:
+    <<: *gpu-worker
+
+  celery_worker_transcription:
+    <<: *gpu-worker
+
+  celery_worker_slides:
+    <<: *gpu-worker
+
+  celery_worker_retrieval:
+    <<: *gpu-worker
