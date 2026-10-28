@@ -18,6 +18,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
   pip install -r requirements.txt
 
 COPY requirements_ml.txt ./requirements_ml.txt
+# PyTorch 2.7.1's CUDA 12.8 wheels support Blackwell GPUs (sm_120). Install
+# the matched torch/torchvision pair before the shared ML requirements so pip
+# retains this GPU-specific build instead of resolving an older CUDA wheel.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --index-url https://download.pytorch.org/whl/cu128 \
+      torch==2.7.1 torchvision==0.22.1
 RUN --mount=type=cache,target=/root/.cache/pip \
   pip install -r requirements_ml.txt
 

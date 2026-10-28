@@ -8,5 +8,7 @@ transformers==4.44.2
 sentence-transformers==3.0.1
 clearml>=1.14.0
 numpy>=1.26,<2.0
-torch>=2.0.0,<2.2.0
-torchvision==0.16.2
+# The Dockerfiles install the platform-specific CPU or CUDA wheels first.
+# Keep these constraints broad enough to preserve those compatible wheel pairs.
+torch>=2.1.2,<3.0
+torchvision>=0.16.2,<1.0

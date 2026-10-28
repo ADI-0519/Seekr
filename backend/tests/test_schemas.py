@@ -58,6 +58,12 @@ class TestLinkSubmitRequest:
         with pytest.raises(ValidationError):
             LinkSubmitRequest(url="https://evil.com/?to=https://youtube.com/watch?v=dQw4w9WgXcQ")
 
+    def test_accepts_configured_kaltura_host(self):
+        req = LinkSubmitRequest(
+            url="https://kaf.keats.kcl.ac.uk/browseandembed/index/media-redirect/entryid/1_abc"
+        )
+        assert req.url.startswith("https://kaf.keats.kcl.ac.uk/")
+
     def test_title_sanitized(self):
         req = LinkSubmitRequest(url="https://youtu.be/dQw4w9WgXcQ", title="  test\x00  ")
         assert req.title == "test"

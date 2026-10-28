@@ -1,19 +1,10 @@
-import re
 import unicodedata
 from datetime import datetime
 from typing import Literal
-from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
-# Define allowed domains for video link submission
-_ALLOWED_VIDEO_DOMAINS = {
-    "youtube.com",
-    "www.youtube.com",
-    "youtu.be",
-    "www.youtu.be",
-    "kaf.keats.kcl.ac.uk",
-}
+from app.core.video_sources import is_supported_video_url
 
 
 # Remove hidden control characters from text inputs to prevent formatting issues
@@ -48,22 +39,7 @@ class LinkSubmitRequest(BaseModel):
     @classmethod
     def validate_video_url(cls, v: str) -> str:
         v = v.strip()
-        youtube_patterns = [
-            r"(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})",
-            r"(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})",
-            r"(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]{11})",
-        ]
-        kaltura_patterns = [
-            r"https?://kaf\.keats\.kcl\.ac\.uk/browseandembed/index/media-redirect/entryid/([a-zA-Z0-9_]+)",
-            r"https?://[\w.-]*kaltura\.com/.+/entryId/([a-zA-Z0-9_]+)",
-        ]
-        if not any(re.search(p, v) for p in youtube_patterns + kaltura_patterns):
-            raise ValueError("Unsupported URL. Paste a YouTube or Kaltura link.")
-
-        # re.search matches anywhere in the string
-        parsed = urlparse(v if "://" in v else f"https://{v}")
-        host = parsed.netloc.lower()
-        if host not in _ALLOWED_VIDEO_DOMAINS and not host.endswith(".kaltura.com"):
+        if not is_supported_video_url(v):
             raise ValueError("Unsupported URL. Paste a YouTube or Kaltura link.")
         return v
 

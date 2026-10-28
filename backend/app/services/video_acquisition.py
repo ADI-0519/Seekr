@@ -10,7 +10,15 @@ from pathlib import Path
 
 import yt_dlp
 
+from app.core.config import get_settings
 from app.core.log_safety import safe_exception_message, safe_url_for_log
+from app.core.video_sources import (
+    extract_kaltura_entry_id,
+    extract_kaltura_partner_id,
+    is_kaltura_url,
+    is_supported_video_url,
+    kaltura_referer,
+)
 
 log = logging.getLogger(__name__)
 
@@ -53,69 +61,13 @@ VIDEO_CONTENT_TYPES = {
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
 MAX_DURATION = 5 * 60 * 60  # 5 hours in seconds
 
-# Regex patterns for identifying and parsing YouTube URLs
-YOUTUBE_PATTERNS = [
-    r"(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})",
-    r"(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})",
-    r"(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]{11})",
-    r"(?:https?://)?(?:www\.)?youtube\.com/v/([a-zA-Z0-9_-]{11})",
-]
 
-# Regex patterns for identifying and parsing supported Kaltura URLs
-KALTURA_PATTERNS = [
-    r"https?://kaf\.keats\.kcl\.ac\.uk/browseandembed/index/media-redirect/entryid/([a-zA-Z0-9_]+)",
-    r"https?://[\w.-]*kaltura\.com/.+/entryId/([a-zA-Z0-9_]+)",
-]
-
-
-# Verify if a URL matches known YouTube formats
-def is_youtube_url(url: str) -> bool:
-    if not url:
-        return False
-    for pattern in YOUTUBE_PATTERNS:
-        if re.match(pattern, url):
-            return True
-    return False
-
-
-# Pull the unique 11-character video identifier from a YouTube URL
-def extract_youtube_id(url: str) -> str | None:
-    for pattern in YOUTUBE_PATTERNS:
-        match = re.match(pattern, url)
-        if match:
-            return match.group(1)
-    return None
-
-
-# Verify if a URL matches known Kaltura formats
-def is_kaltura_url(url: str) -> bool:
-    if not url:
-        return False
-    for pattern in KALTURA_PATTERNS:
-        if re.search(pattern, url):
-            return True
-    return False
-
-
-# Pull the unique media entry identifier from a Kaltura URL
-def extract_kaltura_entry_id(url: str) -> str | None:
-    for pattern in KALTURA_PATTERNS:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
-    return None
-
-
-_DEFAULT_KALTURA_PARTNER_ID = "2368101"
-
-
-# Transform a public Kaltura link into a direct download descriptor
 def resolve_kaltura_url(url: str) -> str:
     entry_id = extract_kaltura_entry_id(url)
     if not entry_id:
         return url
 
-    partner_id = _DEFAULT_KALTURA_PARTNER_ID
+    partner_id = extract_kaltura_partner_id(url) or get_settings().kaltura_default_partner_id
 
     # Extract the partner ID from the page source if available
     try:
@@ -145,7 +97,7 @@ def validate_url(url: str) -> bool:
     url = url.strip()
     if not url.startswith(("http://", "https://")):
         return False
-    return is_youtube_url(url) or is_kaltura_url(url)
+    return is_supported_video_url(url)
 
 
 # Define known file signatures to verify video files regardless of extension
@@ -285,7 +237,9 @@ class VideoDownloader:
         if is_kaltura_url(url):
             if self.cookies_path:
                 opts["cookiefile"] = self.cookies_path
-            opts["http_headers"] = {"Referer": "https://kaf.keats.kcl.ac.uk/"}
+            referer = kaltura_referer(url)
+            if referer:
+                opts["http_headers"] = {"Referer": referer}
         return opts
 
     # Retrieve video information from the remote source without downloading

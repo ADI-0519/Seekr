@@ -4,6 +4,13 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
+from app.core.video_sources import (
+    extract_kaltura_entry_id,
+    extract_kaltura_partner_id,
+    extract_youtube_id,
+    is_kaltura_url,
+    is_youtube_url,
+)
 from app.services.video_acquisition import (
     MAX_DURATION,
     SUPPORTED_FORMATS,
@@ -13,12 +20,8 @@ from app.services.video_acquisition import (
     VideoMetadata,
     VideoValidationError,
     check_file_has_audio,
-    extract_kaltura_entry_id,
-    extract_youtube_id,
     get_video_duration,
     infer_video_content_type,
-    is_kaltura_url,
-    is_youtube_url,
     measure_file_size,
     validate_file_extension,
     validate_uploaded_file,
@@ -84,6 +87,17 @@ class TestKalturaUrlValidation:
 
     def test_kaltura_direct_url(self):
         url = "https://cdnapisec.kaltura.com/p/123/playManifest/entryId/1_abc123/format/url"
+        assert is_kaltura_url(url)
+        assert extract_kaltura_partner_id(url) == "123"
+
+    def test_rejects_unconfigured_custom_host(self):
+        url = "https://media.example.edu/browseandembed/index/media-redirect/entryid/1_abc"
+        assert not is_kaltura_url(url)
+
+    @patch("app.core.video_sources.get_settings")
+    def test_accepts_configured_custom_host(self, mock_settings):
+        mock_settings.return_value.kaltura_allowed_hosts = ["media.example.edu"]
+        url = "https://media.example.edu/browseandembed/index/media-redirect/entryid/1_abc"
         assert is_kaltura_url(url)
 
     def test_invalid_urls(self):
@@ -225,6 +239,13 @@ class TestValidateUploadedFile:
 
 
 class TestVideoDownloader:
+    def test_kaltura_referer_uses_submitted_host(self):
+        dl = VideoDownloader()
+        opts = dl.base_opts(
+            "https://kaf.keats.kcl.ac.uk/browseandembed/index/media-redirect/entryid/1_abc"
+        )
+        assert opts["http_headers"] == {"Referer": "https://kaf.keats.kcl.ac.uk/"}
+
     @patch("yt_dlp.YoutubeDL")
     def test_extract_metadata(self, mock_ydl_class):
         mock_ydl = MagicMock()

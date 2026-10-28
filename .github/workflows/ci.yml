@@ -113,7 +113,7 @@ jobs:
       - name: Start integration services
         run: >-
           docker compose up --detach --build
-          db redis rabbitmq qdrant minio minio-init
+          db redis rabbitmq qdrant minio
       - name: Wait for services
         shell: bash
         run: |
@@ -163,7 +163,8 @@ jobs:
 
   e2e:
     name: Browser smoke test
-    runs-on: ubuntu-latest
+    # Playwright 1.53 does not provide Chromium on a supported image.
+    runs-on: ubuntu-24.04
     needs: frontend
     timeout-minutes: 15
     defaults:

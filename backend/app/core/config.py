@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     finetuned_embedding_model: str = ""
     hf_home: str = ""
 
+    # Third-party Kaltura deployments may use an institution-specific hostname.
+    kaltura_allowed_hosts: list[str] = ["kaf.keats.kcl.ac.uk"]
+    kaltura_default_partner_id: str = "2368101"
+
+    @field_validator("kaltura_allowed_hosts", mode="before")
+    @classmethod
+    def parse_kaltura_hosts(cls, v):
+        if isinstance(v, str):
+            return [host.strip().lower() for host in v.split(",") if host.strip()]
+        return v
+
     # qdrantDB
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "lecture_chunks"
