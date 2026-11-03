@@ -6,7 +6,7 @@ datasets>=2.19.0,<4.0.0
 pyarrow>=15.0.0,<21.0.0
 transformers==4.44.2
 sentence-transformers==3.0.1
-clearml>=1.14.0
+clearml>=2.1.12
 numpy>=1.26,<2.0
 # The Dockerfiles install the platform-specific CPU or CUDA wheels first.
 # Keep these constraints broad enough to preserve those compatible wheel pairs.
